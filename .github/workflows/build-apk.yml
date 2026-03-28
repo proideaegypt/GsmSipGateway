@@ -63,7 +63,7 @@ jobs:
         run: |
           APP=$GITHUB_WORKSPACE/AppProject
           BFILE=$APP/android/app/build.gradle
-          RFILE=$APP/android/build.gradle
+          SFILE=$APP/android/settings.gradle
 
           # Fix namespace and applicationId
           sed -i 's/namespace "com\.appproject"/namespace "com.gsmsipgateway"/' $BFILE
@@ -77,14 +77,14 @@ jobs:
           sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file("keystore\/release.keystore")\n            storePassword "android123"\n            keyAlias "release"\n            keyPassword "android123"\n        }\n    }\n' $BFILE
           sed -i 's/signingConfig signingConfigs\.debug/signingConfig signingConfigs.release/' $BFILE
 
-          # Append Linphone deps with correct maven repo
-          printf '\ndependencies {\n    implementation "org.linphone:linphone-sdk-android:5.2.0"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"\n}\n' >> $BFILE
+          # Append Linphone + extra deps
+          printf '\ndependencies {\n    implementation "org.linphone:linphone-sdk-android:5.3.77"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"\n}\n' >> $BFILE
 
-          # Add linphone maven repo to root build.gradle allprojects
-          sed -i '/allprojects {/,/^}/ s|repositories {|repositories {\n        maven { url "https://linphone.org/maven_repository/" }|' $RFILE
+          # Add linphone repo to settings.gradle dependencyResolutionManagement
+          sed -i '/repositories {/a\            maven { url "https://download.linphone.org/maven_repository/" }' $SFILE
 
-          # Upgrade kotlin version
-          sed -i "s/kotlinVersion = \".*\"/kotlinVersion = \"1.9.22\"/" $RFILE
+          # Upgrade kotlin version in root build.gradle
+          sed -i "s/kotlinVersion = \".*\"/kotlinVersion = \"1.9.22\"/" $APP/android/build.gradle
 
           # gradle.properties
           printf '%s\n' \
@@ -105,10 +105,10 @@ jobs:
             'zipStorePath=wrapper/dists' \
             > $APP/android/gradle/wrapper/gradle-wrapper.properties
 
+          echo "=== settings.gradle ==="
+          cat $SFILE
           echo "=== app/build.gradle ==="
           cat $BFILE
-          echo "=== root build.gradle ==="
-          cat $RFILE
 
       - name: Generate Keystore
         run: |
