@@ -34,37 +34,88 @@ jobs:
           npm install --legacy-peer-deps
           npm install @react-native-async-storage/async-storage --legacy-peer-deps
 
-      - name: Copy source files
+      - name: Copy source files (keep template settings.gradle)
         run: |
           APP=$GITHUB_WORKSPACE/AppProject
           SRC=$GITHUB_WORKSPACE/source
+
           mkdir -p $APP/src
           cp $SRC/src/App.js $APP/src/App.js
           cp $SRC/index.js $APP/index.js
           cp $SRC/app.json $APP/app.json
+
           PKG=$APP/android/app/src/main/java/com/gsmsipgateway
           mkdir -p $PKG
           cp $SRC/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
-          cp $SRC/android/app/src/main/AndroidManifest.xml $APP/android/app/src/main/AndroidManifest.xml
+
+          cp $SRC/android/app/src/main/AndroidManifest.xml \
+             $APP/android/app/src/main/AndroidManifest.xml
+
           mkdir -p $APP/android/app/src/main/res/values
-          cp $SRC/android/app/src/main/res/values/strings.xml $APP/android/app/src/main/res/values/strings.xml
-          cp $SRC/android/app/src/main/res/values/styles.xml $APP/android/app/src/main/res/values/styles.xml
-          cp $SRC/android/app/build.gradle $APP/android/app/build.gradle
-          cp $SRC/android/build.gradle $APP/android/build.gradle
-          cp $SRC/android/gradle.properties $APP/android/gradle.properties
+          cp $SRC/android/app/src/main/res/values/strings.xml \
+             $APP/android/app/src/main/res/values/strings.xml
+          cp $SRC/android/app/src/main/res/values/styles.xml \
+             $APP/android/app/src/main/res/values/styles.xml
+
           cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
 
-      - name: Fix settings.gradle and gradle version
-        run: |
-          APP=$GITHUB_WORKSPACE/AppProject
+          # Only patch gradle.properties - NOT settings.gradle or build.gradle root
           printf '%s\n' \
-            'pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }' \
-            'plugins { id("com.facebook.react.settings") }' \
-            'extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }' \
-            "rootProject.name = 'AppProject'" \
-            "include ':app'" \
-            'includeBuild("../node_modules/@react-native/gradle-plugin")' \
-            > $APP/android/settings.gradle
+            'android.useAndroidX=true' \
+            'android.enableJetifier=true' \
+            'org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m' \
+            'newArchEnabled=false' \
+            'hermesEnabled=true' \
+            > $APP/android/gradle.properties
+
+          # Patch ONLY app/build.gradle - add Linphone + our config
+          printf '%s\n' \
+            'apply plugin: "com.android.application"' \
+            'apply plugin: "org.jetbrains.kotlin.android"' \
+            'apply plugin: "com.facebook.react"' \
+            '' \
+            'react { autolinkLibrariesWithApp() }' \
+            '' \
+            'android {' \
+            '    ndkVersion rootProject.ext.ndkVersion' \
+            '    buildToolsVersion rootProject.ext.buildToolsVersion' \
+            '    compileSdk rootProject.ext.compileSdkVersion' \
+            '    namespace "com.gsmsipgateway"' \
+            '    defaultConfig {' \
+            '        applicationId "com.gsmsipgateway"' \
+            '        minSdkVersion rootProject.ext.minSdkVersion' \
+            '        targetSdkVersion rootProject.ext.targetSdkVersion' \
+            '        versionCode 1' \
+            '        versionName "1.0"' \
+            '    }' \
+            '    signingConfigs {' \
+            '        release {' \
+            '            storeFile file("keystore/release.keystore")' \
+            '            storePassword "android123"' \
+            '            keyAlias "release"' \
+            '            keyPassword "android123"' \
+            '        }' \
+            '    }' \
+            '    buildTypes {' \
+            '        debug { signingConfig signingConfigs.debug }' \
+            '        release {' \
+            '            signingConfig signingConfigs.release' \
+            '            minifyEnabled false' \
+            '            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"' \
+            '        }' \
+            '    }' \
+            '}' \
+            '' \
+            'dependencies {' \
+            '    implementation("com.facebook.react:react-android")' \
+            '    implementation("com.facebook.react:hermes-android")' \
+            '    implementation "org.linphone:linphone-sdk-android:5.3.+"' \
+            '    implementation "androidx.core:core:1.12.0"' \
+            '    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"' \
+            '}' \
+            > $APP/android/app/build.gradle
+
+          # Force Gradle 8.6
           printf '%s\n' \
             'distributionBase=GRADLE_USER_HOME' \
             'distributionPath=wrapper/dists' \
@@ -73,10 +124,11 @@ jobs:
             'zipStoreBase=GRADLE_USER_HOME' \
             'zipStorePath=wrapper/dists' \
             > $APP/android/gradle/wrapper/gradle-wrapper.properties
-          echo "=== settings.gradle ==="
+
+          echo "=== settings.gradle (template - untouched) ==="
           cat $APP/android/settings.gradle
-          echo "=== gradle-wrapper.properties ==="
-          cat $APP/android/gradle/wrapper/gradle-wrapper.properties
+          echo "=== app/build.gradle ==="
+          cat $APP/android/app/build.gradle
 
       - name: Generate Keystore
         run: |
@@ -91,7 +143,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/AppProject/android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon
         env:
           GRADLE_OPTS: "-Xmx4096m -XX:MaxMetaspaceSize=512m"
 
