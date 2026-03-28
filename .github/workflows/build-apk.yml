@@ -44,6 +44,7 @@ jobs:
           cp $SRC/index.js $APP/index.js
           cp $SRC/app.json $APP/app.json
 
+          # Copy our Java files into correct package dir
           PKG=$APP/android/app/src/main/java/com/gsmsipgateway
           mkdir -p $PKG
           cp $SRC/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
@@ -58,6 +59,27 @@ jobs:
              $APP/android/app/src/main/res/values/styles.xml
 
           cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
+
+      - name: Rename template Kotlin package references
+        run: |
+          APP=$GITHUB_WORKSPACE/AppProject
+          KTDIR=$APP/android/app/src/main/java
+
+          # Rename package folder from com/appproject to com/gsmsipgateway
+          if [ -d "$KTDIR/com/appproject" ]; then
+            # Update package declarations and imports inside .kt files
+            find $KTDIR/com/appproject -name "*.kt" | while read f; do
+              sed -i 's/package com\.appproject/package com.gsmsipgateway/g' "$f"
+              sed -i 's/import com\.appproject/import com.gsmsipgateway/g' "$f"
+            done
+            # Move files to correct package folder
+            mkdir -p $KTDIR/com/gsmsipgateway
+            cp $KTDIR/com/appproject/*.kt $KTDIR/com/gsmsipgateway/ 2>/dev/null || true
+            rm -rf $KTDIR/com/appproject
+          fi
+
+          echo "=== Kotlin files in gsmsipgateway ==="
+          ls -la $KTDIR/com/gsmsipgateway/
 
       - name: Patch gradle files
         run: |
@@ -76,7 +98,7 @@ jobs:
           sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file("keystore\/release.keystore")\n            storePassword "android123"\n            keyAlias "release"\n            keyPassword "android123"\n        }\n    }\n' $BFILE
           sed -i 's/signingConfig signingConfigs\.debug/signingConfig signingConfigs.release/' $BFILE
 
-          # Append only standard androidx deps (NO Linphone - using Android built-in SIP)
+          # Append only standard androidx deps
           printf '\ndependencies {\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"\n}\n' >> $BFILE
 
           # Upgrade kotlin version
