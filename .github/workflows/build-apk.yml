@@ -62,27 +62,27 @@ jobs:
       - name: Patch gradle files
         run: |
           APP=$GITHUB_WORKSPACE/AppProject
+          BFILE=$APP/android/app/build.gradle
 
-          echo "=== Original app/build.gradle from template ==="
-          cat $APP/android/app/build.gradle
+          echo "=== Original build.gradle ==="
+          cat $BFILE
 
-          # Change namespace and applicationId
-          sed -i 's/namespace "com\.appproject"/namespace "com.gsmsipgateway"/' $APP/android/app/build.gradle
-          sed -i 's/applicationId "com\.appproject"/applicationId "com.gsmsipgateway"/' $APP/android/app/build.gradle
-          sed -i 's/namespace "com\.AppProject"/namespace "com.gsmsipgateway"/' $APP/android/app/build.gradle
-          sed -i 's/applicationId "com\.AppProject"/applicationId "com.gsmsipgateway"/' $APP/android/app/build.gradle
-          sed -i 's/minSdkVersion = 21/minSdkVersion = 26/' $APP/android/app/build.gradle
+          # Fix namespace and applicationId
+          sed -i 's/namespace "com\.appproject"/namespace "com.gsmsipgateway"/' $BFILE
+          sed -i 's/applicationId "com\.appproject"/applicationId "com.gsmsipgateway"/' $BFILE
+          sed -i 's/namespace "com\.AppProject"/namespace "com.gsmsipgateway"/' $BFILE
+          sed -i 's/applicationId "com\.AppProject"/applicationId "com.gsmsipgateway"/' $BFILE
+          sed -i 's/minSdkVersion = 21/minSdkVersion = 26/' $BFILE
+          sed -i 's/minSdkVersion 21/minSdkVersion 26/' $BFILE
 
-          # Add Linphone + extra deps before last closing brace of dependencies block
-          sed -i '/^}$/i\    implementation "org.linphone:linphone-sdk-android:5.3.+"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"' \
-            $APP/android/app/build.gradle
+          # Add signing config block before buildTypes
+          sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file("keystore\/release.keystore")\n            storePassword "android123"\n            keyAlias "release"\n            keyPassword "android123"\n        }\n    }\n' $BFILE
 
-          # Add signing config for release
-          sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file("keystore\/release.keystore")\n            storePassword "android123"\n            keyAlias "release"\n            keyPassword "android123"\n        }\n    }' \
-            $APP/android/app/build.gradle
+          # Set release signing
+          sed -i 's/signingConfig signingConfigs\.debug/signingConfig signingConfigs.release/' $BFILE
 
-          sed -i 's/signingConfig signingConfigs\.debug/signingConfig signingConfigs.release/' \
-            $APP/android/app/build.gradle
+          # Append extra dependencies AFTER the last line of the file
+          printf '\ndependencies {\n    implementation "org.linphone:linphone-sdk-android:5.3.+"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"\n}\n' >> $BFILE
 
           # gradle.properties
           printf '%s\n' \
@@ -103,8 +103,8 @@ jobs:
             'zipStorePath=wrapper/dists' \
             > $APP/android/gradle/wrapper/gradle-wrapper.properties
 
-          echo "=== Patched app/build.gradle ==="
-          cat $APP/android/app/build.gradle
+          echo "=== Patched build.gradle ==="
+          cat $BFILE
 
       - name: Generate Keystore
         run: |
