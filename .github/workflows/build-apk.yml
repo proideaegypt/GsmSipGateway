@@ -34,7 +34,7 @@ jobs:
           npm install --legacy-peer-deps
           npm install @react-native-async-storage/async-storage --legacy-peer-deps
 
-      - name: Copy source files (keep template settings.gradle)
+      - name: Copy source files
         run: |
           APP=$GITHUB_WORKSPACE/AppProject
           SRC=$GITHUB_WORKSPACE/source
@@ -59,7 +59,32 @@ jobs:
 
           cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
 
-          # Only patch gradle.properties - NOT settings.gradle or build.gradle root
+      - name: Patch gradle files
+        run: |
+          APP=$GITHUB_WORKSPACE/AppProject
+
+          echo "=== Original app/build.gradle from template ==="
+          cat $APP/android/app/build.gradle
+
+          # Change namespace and applicationId
+          sed -i 's/namespace "com\.appproject"/namespace "com.gsmsipgateway"/' $APP/android/app/build.gradle
+          sed -i 's/applicationId "com\.appproject"/applicationId "com.gsmsipgateway"/' $APP/android/app/build.gradle
+          sed -i 's/namespace "com\.AppProject"/namespace "com.gsmsipgateway"/' $APP/android/app/build.gradle
+          sed -i 's/applicationId "com\.AppProject"/applicationId "com.gsmsipgateway"/' $APP/android/app/build.gradle
+          sed -i 's/minSdkVersion = 21/minSdkVersion = 26/' $APP/android/app/build.gradle
+
+          # Add Linphone + extra deps before last closing brace of dependencies block
+          sed -i '/^}$/i\    implementation "org.linphone:linphone-sdk-android:5.3.+"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"' \
+            $APP/android/app/build.gradle
+
+          # Add signing config for release
+          sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file("keystore\/release.keystore")\n            storePassword "android123"\n            keyAlias "release"\n            keyPassword "android123"\n        }\n    }' \
+            $APP/android/app/build.gradle
+
+          sed -i 's/signingConfig signingConfigs\.debug/signingConfig signingConfigs.release/' \
+            $APP/android/app/build.gradle
+
+          # gradle.properties
           printf '%s\n' \
             'android.useAndroidX=true' \
             'android.enableJetifier=true' \
@@ -67,53 +92,6 @@ jobs:
             'newArchEnabled=false' \
             'hermesEnabled=true' \
             > $APP/android/gradle.properties
-
-          # Patch ONLY app/build.gradle - add Linphone + our config
-          printf '%s\n' \
-            'apply plugin: "com.android.application"' \
-            'apply plugin: "org.jetbrains.kotlin.android"' \
-            'apply plugin: "com.facebook.react"' \
-            '' \
-            'react { autolinkLibrariesWithApp() }' \
-            '' \
-            'android {' \
-            '    ndkVersion rootProject.ext.ndkVersion' \
-            '    buildToolsVersion rootProject.ext.buildToolsVersion' \
-            '    compileSdk rootProject.ext.compileSdkVersion' \
-            '    namespace "com.gsmsipgateway"' \
-            '    defaultConfig {' \
-            '        applicationId "com.gsmsipgateway"' \
-            '        minSdkVersion rootProject.ext.minSdkVersion' \
-            '        targetSdkVersion rootProject.ext.targetSdkVersion' \
-            '        versionCode 1' \
-            '        versionName "1.0"' \
-            '    }' \
-            '    signingConfigs {' \
-            '        release {' \
-            '            storeFile file("keystore/release.keystore")' \
-            '            storePassword "android123"' \
-            '            keyAlias "release"' \
-            '            keyPassword "android123"' \
-            '        }' \
-            '    }' \
-            '    buildTypes {' \
-            '        debug { signingConfig signingConfigs.debug }' \
-            '        release {' \
-            '            signingConfig signingConfigs.release' \
-            '            minifyEnabled false' \
-            '            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"' \
-            '        }' \
-            '    }' \
-            '}' \
-            '' \
-            'dependencies {' \
-            '    implementation("com.facebook.react:react-android")' \
-            '    implementation("com.facebook.react:hermes-android")' \
-            '    implementation "org.linphone:linphone-sdk-android:5.3.+"' \
-            '    implementation "androidx.core:core:1.12.0"' \
-            '    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"' \
-            '}' \
-            > $APP/android/app/build.gradle
 
           # Force Gradle 8.6
           printf '%s\n' \
@@ -125,9 +103,7 @@ jobs:
             'zipStorePath=wrapper/dists' \
             > $APP/android/gradle/wrapper/gradle-wrapper.properties
 
-          echo "=== settings.gradle (template - untouched) ==="
-          cat $APP/android/settings.gradle
-          echo "=== app/build.gradle ==="
+          echo "=== Patched app/build.gradle ==="
           cat $APP/android/app/build.gradle
 
       - name: Generate Keystore
