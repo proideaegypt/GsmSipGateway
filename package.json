@@ -1,0 +1,14 @@
+{
+  "name": "GsmSipGateway",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "build-release": "cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-native": "0.73.6",
+    "@react-native-async-storage/async-storage": "^1.21.0"
+  }
+}

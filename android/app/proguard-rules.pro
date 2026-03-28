@@ -1,0 +1,2 @@
+-keep class org.linphone.** { *; }
+-keep class com.gsmsipgateway.** { *; }
