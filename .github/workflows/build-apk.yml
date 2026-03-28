@@ -30,51 +30,71 @@ jobs:
           cd $GITHUB_WORKSPACE
           npx react-native@0.73.6 init AppProject --version 0.73.6 --skip-install
 
-      - name: Copy our source files
-        run: |
-          APP=$GITHUB_WORKSPACE/AppProject
-          SRC=$GITHUB_WORKSPACE/source
-
-          mkdir -p $APP/src
-          cp $SRC/src/App.js $APP/src/App.js
-          cp $SRC/index.js   $APP/index.js
-          cp $SRC/app.json   $APP/app.json
-
-          PKG=$APP/android/app/src/main/java/com/gsmsipgateway
-          mkdir -p $PKG
-          cp $SRC/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
-
-          cp $SRC/android/app/src/main/AndroidManifest.xml \
-             $APP/android/app/src/main/AndroidManifest.xml
-
-          mkdir -p $APP/android/app/src/main/res/values
-          cp $SRC/android/app/src/main/res/values/strings.xml \
-             $APP/android/app/src/main/res/values/strings.xml
-          cp $SRC/android/app/src/main/res/values/styles.xml \
-             $APP/android/app/src/main/res/values/styles.xml
-
-          cp $SRC/android/app/build.gradle       $APP/android/app/build.gradle
-          cp $SRC/android/build.gradle           $APP/android/build.gradle
-          cp $SRC/android/gradle.properties      $APP/android/gradle.properties
-          cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
-
       - name: Install dependencies
         run: |
           cd $GITHUB_WORKSPACE/AppProject
           npm install --legacy-peer-deps
           npm install @react-native-async-storage/async-storage --legacy-peer-deps
 
-      - name: Force Gradle 8.6
+      - name: Copy ALL our files (after npm install)
         run: |
-          PROPS=$GITHUB_WORKSPACE/AppProject/android/gradle/wrapper/gradle-wrapper.properties
-          echo "distributionBase=GRADLE_USER_HOME" > $PROPS
-          echo "distributionPath=wrapper/dists" >> $PROPS
-          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.6-bin.zip" >> $PROPS
-          echo "networkTimeout=10000" >> $PROPS
-          echo "zipStoreBase=GRADLE_USER_HOME" >> $PROPS
-          echo "zipStorePath=wrapper/dists" >> $PROPS
-          echo "--- gradle-wrapper.properties ---"
-          cat $PROPS
+          APP=$GITHUB_WORKSPACE/AppProject
+          SRC=$GITHUB_WORKSPACE/source
+
+          # JS files
+          mkdir -p $APP/src
+          cp $SRC/src/App.js $APP/src/App.js
+          cp $SRC/index.js   $APP/index.js
+          cp $SRC/app.json   $APP/app.json
+
+          # Java sources
+          PKG=$APP/android/app/src/main/java/com/gsmsipgateway
+          mkdir -p $PKG
+          cp $SRC/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
+
+          # AndroidManifest
+          cp $SRC/android/app/src/main/AndroidManifest.xml \
+             $APP/android/app/src/main/AndroidManifest.xml
+
+          # res/values
+          mkdir -p $APP/android/app/src/main/res/values
+          cp $SRC/android/app/src/main/res/values/strings.xml \
+             $APP/android/app/src/main/res/values/strings.xml
+          cp $SRC/android/app/src/main/res/values/styles.xml \
+             $APP/android/app/src/main/res/values/styles.xml
+
+          # Gradle files - copy AFTER npm install
+          cp $SRC/android/app/build.gradle       $APP/android/app/build.gradle
+          cp $SRC/android/build.gradle           $APP/android/build.gradle
+          cp $SRC/android/gradle.properties      $APP/android/gradle.properties
+          cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
+
+          # settings.gradle - MUST be copied last
+          cat > $APP/android/settings.gradle << 'EOF'
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'AppProject'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')
+EOF
+
+          # Force Gradle 8.6
+          cat > $APP/android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.6-bin.zip
+networkTimeout=10000
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+
+          echo "=== settings.gradle ==="
+          cat $APP/android/settings.gradle
+          echo "=== gradle-wrapper.properties ==="
+          cat $APP/android/gradle/wrapper/gradle-wrapper.properties
+          echo "=== app/build.gradle ==="
+          cat $APP/android/app/build.gradle
 
       - name: Generate Keystore
         run: |
@@ -89,7 +109,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/AppProject/android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: "-Xmx4096m -XX:MaxMetaspaceSize=512m"
 
