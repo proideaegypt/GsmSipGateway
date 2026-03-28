@@ -32,7 +32,6 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/AppProject
           npm install --legacy-peer-deps
-          # Use version compatible with RN 0.73 / Kotlin 1.8
           npm install @react-native-async-storage/async-storage@1.21.0 --legacy-peer-deps
 
       - name: Copy source files
@@ -64,9 +63,7 @@ jobs:
         run: |
           APP=$GITHUB_WORKSPACE/AppProject
           BFILE=$APP/android/app/build.gradle
-
-          echo "=== Original build.gradle ==="
-          cat $BFILE
+          RFILE=$APP/android/build.gradle
 
           # Fix namespace and applicationId
           sed -i 's/namespace "com\.appproject"/namespace "com.gsmsipgateway"/' $BFILE
@@ -78,14 +75,18 @@ jobs:
 
           # Add signing config before buildTypes
           sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file("keystore\/release.keystore")\n            storePassword "android123"\n            keyAlias "release"\n            keyPassword "android123"\n        }\n    }\n' $BFILE
-
-          # Set release signing
           sed -i 's/signingConfig signingConfigs\.debug/signingConfig signingConfigs.release/' $BFILE
 
-          # Append Linphone + androidx deps as separate block at end
-          printf '\ndependencies {\n    implementation "org.linphone:linphone-sdk-android:5.3.+"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"\n}\n' >> $BFILE
+          # Append Linphone deps with correct maven repo
+          printf '\ndependencies {\n    implementation "org.linphone:linphone-sdk-android:5.2.0"\n    implementation "androidx.core:core:1.12.0"\n    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"\n}\n' >> $BFILE
 
-          # gradle.properties - upgrade kotlin to 1.9.22 to avoid async-storage conflict
+          # Add linphone maven repo to root build.gradle allprojects
+          sed -i '/allprojects {/,/^}/ s|repositories {|repositories {\n        maven { url "https://linphone.org/maven_repository/" }|' $RFILE
+
+          # Upgrade kotlin version
+          sed -i "s/kotlinVersion = \".*\"/kotlinVersion = \"1.9.22\"/" $RFILE
+
+          # gradle.properties
           printf '%s\n' \
             'android.useAndroidX=true' \
             'android.enableJetifier=true' \
@@ -93,9 +94,6 @@ jobs:
             'newArchEnabled=false' \
             'hermesEnabled=true' \
             > $APP/android/gradle.properties
-
-          # Patch root build.gradle kotlin version to 1.9.22
-          sed -i "s/kotlinVersion = \".*\"/kotlinVersion = \"1.9.22\"/" $APP/android/build.gradle
 
           # Force Gradle 8.6
           printf '%s\n' \
@@ -107,10 +105,10 @@ jobs:
             'zipStorePath=wrapper/dists' \
             > $APP/android/gradle/wrapper/gradle-wrapper.properties
 
-          echo "=== Patched app/build.gradle ==="
+          echo "=== app/build.gradle ==="
           cat $BFILE
           echo "=== root build.gradle ==="
-          cat $APP/android/build.gradle
+          cat $RFILE
 
       - name: Generate Keystore
         run: |
