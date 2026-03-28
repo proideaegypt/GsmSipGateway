@@ -23,6 +23,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Setup React Native Android project
+        run: |
+          cd android
+          # Download gradle wrapper jar
+          mkdir -p gradle/wrapper
+          curl -L -o gradle/wrapper/gradle-wrapper.jar \
+            https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar
+          # Make gradlew executable
+          chmod +x gradlew
+
       - name: Generate Keystore
         run: |
           mkdir -p android/app/keystore
@@ -31,12 +44,6 @@ jobs:
             -alias release -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android123 -keypass android123 \
             -dname "CN=GsmSipGateway,OU=Dev,O=Dev,L=Cairo,ST=Cairo,C=EG"
-
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Give Gradle permission
-        run: chmod +x android/gradlew
 
       - name: Build Release APK
         run: cd android && ./gradlew assembleRelease --no-daemon
