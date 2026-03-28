@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: source
 
       - uses: actions/setup-node@v4
         with:
@@ -23,30 +25,53 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Setup React Native Android project
+      - name: Init fresh React Native project
         run: |
-          cd android
-          # Download gradle wrapper jar
-          mkdir -p gradle/wrapper
-          curl -L -o gradle/wrapper/gradle-wrapper.jar \
-            https://github.com/gradle/gradle/raw/v8.6.0/gradle/wrapper/gradle-wrapper.jar
-          # Make gradlew executable
-          chmod +x gradlew
+          npx react-native@0.73.6 init GsmSipGateway --version 0.73.6 --skip-install
+
+      - name: Copy our source files over the template
+        run: |
+          cp source/src/App.js GsmSipGateway/src/App.js
+          cp source/index.js GsmSipGateway/index.js
+          cp source/app.json GsmSipGateway/app.json
+
+          PKG=GsmSipGateway/android/app/src/main/java/com/gsmsipgateway
+          mkdir -p $PKG
+          cp source/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
+
+          cp source/android/app/src/main/AndroidManifest.xml \
+             GsmSipGateway/android/app/src/main/AndroidManifest.xml
+
+          cp source/android/app/src/main/res/values/strings.xml \
+             GsmSipGateway/android/app/src/main/res/values/strings.xml
+          cp source/android/app/src/main/res/values/styles.xml \
+             GsmSipGateway/android/app/src/main/res/values/styles.xml
+
+          cp source/android/app/build.gradle GsmSipGateway/android/app/build.gradle
+          cp source/android/build.gradle GsmSipGateway/android/build.gradle
+          cp source/android/gradle.properties GsmSipGateway/android/gradle.properties
+          cp source/android/app/proguard-rules.pro GsmSipGateway/android/app/proguard-rules.pro
+
+      - name: Install dependencies
+        run: |
+          cd GsmSipGateway
+          npm install --legacy-peer-deps
+          npm install @react-native-async-storage/async-storage --legacy-peer-deps
 
       - name: Generate Keystore
         run: |
-          mkdir -p android/app/keystore
+          mkdir -p GsmSipGateway/android/app/keystore
           keytool -genkeypair -v \
-            -keystore android/app/keystore/release.keystore \
+            -keystore GsmSipGateway/android/app/keystore/release.keystore \
             -alias release -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android123 -keypass android123 \
             -dname "CN=GsmSipGateway,OU=Dev,O=Dev,L=Cairo,ST=Cairo,C=EG"
 
       - name: Build Release APK
-        run: cd android && ./gradlew assembleRelease --no-daemon
+        run: |
+          cd GsmSipGateway/android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
         env:
           GRADLE_OPTS: "-Xmx4096m -XX:MaxMetaspaceSize=512m"
 
@@ -54,5 +79,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: GsmSipGateway-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: GsmSipGateway/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 7
