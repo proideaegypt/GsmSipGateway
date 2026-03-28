@@ -25,60 +25,72 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Init fresh React Native project
+      - name: Init React Native project
         run: |
-          npx react-native@0.73.6 init GsmSipGateway --version 0.73.6 --skip-install
-          ls -la GsmSipGateway/
+          cd $GITHUB_WORKSPACE
+          npx react-native@0.73.6 init AppProject --version 0.73.6 --skip-install
+          echo "--- AppProject contents ---"
+          ls -la AppProject/
+          ls -la AppProject/android/
 
-      - name: Copy our source files over the template
+      - name: Copy our source files
         run: |
-          # Create src dir if not exists
-          mkdir -p GsmSipGateway/src
+          APP=$GITHUB_WORKSPACE/AppProject
+          SRC=$GITHUB_WORKSPACE/source
 
-          cp source/src/App.js GsmSipGateway/src/App.js
-          cp source/index.js   GsmSipGateway/index.js
-          cp source/app.json   GsmSipGateway/app.json
+          # JS files
+          mkdir -p $APP/src
+          cp $SRC/src/App.js $APP/src/App.js
+          cp $SRC/index.js   $APP/index.js
+          cp $SRC/app.json   $APP/app.json
 
           # Java sources
-          PKG=GsmSipGateway/android/app/src/main/java/com/gsmsipgateway
+          PKG=$APP/android/app/src/main/java/com/gsmsipgateway
           mkdir -p $PKG
-          cp source/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
+          cp $SRC/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
 
           # AndroidManifest
-          cp source/android/app/src/main/AndroidManifest.xml \
-             GsmSipGateway/android/app/src/main/AndroidManifest.xml
+          cp $SRC/android/app/src/main/AndroidManifest.xml \
+             $APP/android/app/src/main/AndroidManifest.xml
 
           # res/values
-          mkdir -p GsmSipGateway/android/app/src/main/res/values
-          cp source/android/app/src/main/res/values/strings.xml \
-             GsmSipGateway/android/app/src/main/res/values/strings.xml
-          cp source/android/app/src/main/res/values/styles.xml \
-             GsmSipGateway/android/app/src/main/res/values/styles.xml
+          mkdir -p $APP/android/app/src/main/res/values
+          cp $SRC/android/app/src/main/res/values/strings.xml \
+             $APP/android/app/src/main/res/values/strings.xml
+          cp $SRC/android/app/src/main/res/values/styles.xml \
+             $APP/android/app/src/main/res/values/styles.xml
 
           # Gradle files
-          cp source/android/app/build.gradle      GsmSipGateway/android/app/build.gradle
-          cp source/android/build.gradle          GsmSipGateway/android/build.gradle
-          cp source/android/gradle.properties     GsmSipGateway/android/gradle.properties
-          cp source/android/app/proguard-rules.pro GsmSipGateway/android/app/proguard-rules.pro
+          cp $SRC/android/app/build.gradle       $APP/android/app/build.gradle
+          cp $SRC/android/build.gradle           $APP/android/build.gradle
+          cp $SRC/android/gradle.properties      $APP/android/gradle.properties
+          cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
+
+          # Fix gradle version to 8.6
+          sed -i 's/gradle-.*-bin.zip/gradle-8.6-bin.zip/' \
+            $APP/android/gradle/wrapper/gradle-wrapper.properties
+
+          echo "--- gradle-wrapper.properties ---"
+          cat $APP/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install dependencies
         run: |
-          cd GsmSipGateway
+          cd $GITHUB_WORKSPACE/AppProject
           npm install --legacy-peer-deps
           npm install @react-native-async-storage/async-storage --legacy-peer-deps
 
       - name: Generate Keystore
         run: |
-          mkdir -p GsmSipGateway/android/app/keystore
+          mkdir -p $GITHUB_WORKSPACE/AppProject/android/app/keystore
           keytool -genkeypair -v \
-            -keystore GsmSipGateway/android/app/keystore/release.keystore \
+            -keystore $GITHUB_WORKSPACE/AppProject/android/app/keystore/release.keystore \
             -alias release -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android123 -keypass android123 \
             -dname "CN=GsmSipGateway,OU=Dev,O=Dev,L=Cairo,ST=Cairo,C=EG"
 
       - name: Build Release APK
         run: |
-          cd GsmSipGateway/android
+          cd $GITHUB_WORKSPACE/AppProject/android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
         env:
@@ -88,5 +100,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: GsmSipGateway-release
-          path: GsmSipGateway/android/app/build/outputs/apk/release/app-release.apk
+          path: AppProject/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 7
