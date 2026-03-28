@@ -2,12 +2,19 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-react { autolinkLibrariesWithApp() }
+react {
+    autolinkLibrariesWithApp()
+}
+
+def enableProguardInReleaseBuilds = false
+def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
     namespace "com.gsmsipgateway"
+
     defaultConfig {
         applicationId "com.gsmsipgateway"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -15,6 +22,7 @@ android {
         versionCode 1
         versionName "1.0"
     }
+
     signingConfigs {
         release {
             storeFile file('keystore/release.keystore')
@@ -23,11 +31,14 @@ android {
             keyPassword 'android123'
         }
     }
+
     buildTypes {
-        debug { signingConfig signingConfigs.debug }
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
@@ -36,7 +47,10 @@ android {
 dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
+
+    // Linphone SDK for SIP
     implementation "org.linphone:linphone-sdk-android:5.3.+"
+
     implementation 'androidx.core:core:1.12.0'
     implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
 }
