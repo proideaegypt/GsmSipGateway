@@ -28,28 +28,37 @@ jobs:
       - name: Init fresh React Native project
         run: |
           npx react-native@0.73.6 init GsmSipGateway --version 0.73.6 --skip-install
+          ls -la GsmSipGateway/
 
       - name: Copy our source files over the template
         run: |
-          cp source/src/App.js GsmSipGateway/src/App.js
-          cp source/index.js GsmSipGateway/index.js
-          cp source/app.json GsmSipGateway/app.json
+          # Create src dir if not exists
+          mkdir -p GsmSipGateway/src
 
+          cp source/src/App.js GsmSipGateway/src/App.js
+          cp source/index.js   GsmSipGateway/index.js
+          cp source/app.json   GsmSipGateway/app.json
+
+          # Java sources
           PKG=GsmSipGateway/android/app/src/main/java/com/gsmsipgateway
           mkdir -p $PKG
           cp source/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
 
+          # AndroidManifest
           cp source/android/app/src/main/AndroidManifest.xml \
              GsmSipGateway/android/app/src/main/AndroidManifest.xml
 
+          # res/values
+          mkdir -p GsmSipGateway/android/app/src/main/res/values
           cp source/android/app/src/main/res/values/strings.xml \
              GsmSipGateway/android/app/src/main/res/values/strings.xml
           cp source/android/app/src/main/res/values/styles.xml \
              GsmSipGateway/android/app/src/main/res/values/styles.xml
 
-          cp source/android/app/build.gradle GsmSipGateway/android/app/build.gradle
-          cp source/android/build.gradle GsmSipGateway/android/build.gradle
-          cp source/android/gradle.properties GsmSipGateway/android/gradle.properties
+          # Gradle files
+          cp source/android/app/build.gradle      GsmSipGateway/android/app/build.gradle
+          cp source/android/build.gradle          GsmSipGateway/android/build.gradle
+          cp source/android/gradle.properties     GsmSipGateway/android/gradle.properties
           cp source/android/app/proguard-rules.pro GsmSipGateway/android/app/proguard-rules.pro
 
       - name: Install dependencies
