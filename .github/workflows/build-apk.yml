@@ -29,55 +29,52 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           npx react-native@0.73.6 init AppProject --version 0.73.6 --skip-install
-          echo "--- AppProject contents ---"
-          ls -la AppProject/
-          ls -la AppProject/android/
 
       - name: Copy our source files
         run: |
           APP=$GITHUB_WORKSPACE/AppProject
           SRC=$GITHUB_WORKSPACE/source
 
-          # JS files
           mkdir -p $APP/src
           cp $SRC/src/App.js $APP/src/App.js
           cp $SRC/index.js   $APP/index.js
           cp $SRC/app.json   $APP/app.json
 
-          # Java sources
           PKG=$APP/android/app/src/main/java/com/gsmsipgateway
           mkdir -p $PKG
           cp $SRC/android/app/src/main/java/com/gsmsipgateway/*.java $PKG/
 
-          # AndroidManifest
           cp $SRC/android/app/src/main/AndroidManifest.xml \
              $APP/android/app/src/main/AndroidManifest.xml
 
-          # res/values
           mkdir -p $APP/android/app/src/main/res/values
           cp $SRC/android/app/src/main/res/values/strings.xml \
              $APP/android/app/src/main/res/values/strings.xml
           cp $SRC/android/app/src/main/res/values/styles.xml \
              $APP/android/app/src/main/res/values/styles.xml
 
-          # Gradle files
           cp $SRC/android/app/build.gradle       $APP/android/app/build.gradle
           cp $SRC/android/build.gradle           $APP/android/build.gradle
           cp $SRC/android/gradle.properties      $APP/android/gradle.properties
           cp $SRC/android/app/proguard-rules.pro $APP/android/app/proguard-rules.pro
-
-          # Fix gradle version to 8.6
-          sed -i 's/gradle-.*-bin.zip/gradle-8.6-bin.zip/' \
-            $APP/android/gradle/wrapper/gradle-wrapper.properties
-
-          echo "--- gradle-wrapper.properties ---"
-          cat $APP/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install dependencies
         run: |
           cd $GITHUB_WORKSPACE/AppProject
           npm install --legacy-peer-deps
           npm install @react-native-async-storage/async-storage --legacy-peer-deps
+
+      - name: Force Gradle 8.6
+        run: |
+          PROPS=$GITHUB_WORKSPACE/AppProject/android/gradle/wrapper/gradle-wrapper.properties
+          echo "distributionBase=GRADLE_USER_HOME" > $PROPS
+          echo "distributionPath=wrapper/dists" >> $PROPS
+          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.6-bin.zip" >> $PROPS
+          echo "networkTimeout=10000" >> $PROPS
+          echo "zipStoreBase=GRADLE_USER_HOME" >> $PROPS
+          echo "zipStorePath=wrapper/dists" >> $PROPS
+          echo "--- gradle-wrapper.properties ---"
+          cat $PROPS
 
       - name: Generate Keystore
         run: |
