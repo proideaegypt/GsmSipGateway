@@ -12,6 +12,8 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
     private LinphoneEngine sip;
     private String host, user, pass, ext;
     private int port;
+    private boolean isSipRegistered = false;
+    private Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public void onCreate() {
@@ -42,7 +44,7 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
                     String caller = intent.getStringExtra("caller_number");
                     updateNote("Incoming: " + caller);
                     autoAnswer();
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> sip.callSip(ext, host), 1200);
+                    handler.postDelayed(() -> bridgeToHaidi(), 1200);
                     break;
                 case "ACTION_CALL_ENDED":
                     if (sip != null) sip.hangup();
@@ -64,9 +66,40 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
         } catch (SecurityException e) { Log.e(TAG, e.getMessage()); }
     }
 
-    @Override public void onSipRegistered()    { updateNote("SIP Registered - Ready"); }
+    private void bridgeToHaidi() {
+        if (!isSipRegistered) {
+            Log.w(TAG, "SIP not registered yet, retrying bridge in 500ms...");
+            handler.postDelayed(this::bridgeToHaidi, 500);
+            return;
+        }
+
+        Log.d(TAG, "SIP registered, bridging to extension " + ext);
+        updateNote("Bridging to Haidi...");
+        boolean success = sip.callSip(ext, host);
+        if (!success) {
+            Log.e(TAG, "Failed to dial " + ext + ", will retry in 500ms");
+            handler.postDelayed(this::bridgeToHaidi, 500);
+        }
+    }
+
+    @Override public void onSipRegistered() {
+        isSipRegistered = true;
+        Log.d(TAG, "SIP Registration successful");
+        updateNote("SIP Registered - Ready");
+    }
+
     @Override public void onSipCallConnected() { updateNote("Bridge Active"); }
     @Override public void onSipCallEnded()     { updateNote("Ready - Waiting..."); }
+
+    private void onSipRegistrationFailed() {
+        isSipRegistered = false;
+        Log.e(TAG, "SIP Registration failed, will retry in 2000ms");
+        updateNote("Registration Failed - Retrying...");
+        handler.postDelayed(() -> {
+            Log.d(TAG, "Retrying SIP registration...");
+            sip.register(host, port, user, pass);
+        }, 2000);
+    }
 
     private void createChannel() {
         NotificationChannel c = new NotificationChannel(CH, "GSM-SIP Bridge", NotificationManager.IMPORTANCE_LOW);
