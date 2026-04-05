@@ -16,6 +16,7 @@ public class LinphoneEngine {
 
     public interface BridgeCallback {
         void onSipRegistered();
+        void onSipRegistrationFailed();
         void onSipCallConnected();
         void onSipCallEnded();
     }
@@ -32,6 +33,11 @@ public class LinphoneEngine {
     public void register(String host, int port, String user, String pass) {
         this.host = host;
         this.user = user;
+        if (sipManager == null) {
+            Log.e(TAG, "register skipped: SIP manager unavailable");
+            if (callback != null) callback.onSipRegistrationFailed();
+            return;
+        }
         try {
             if (localProfile != null) {
                 try { sipManager.close(localProfile.getUriString()); } catch (Exception ignored) {}
@@ -60,14 +66,20 @@ public class LinphoneEngine {
                     }
                     @Override public void onRegistrationFailed(String localProfileUri, int errorCode, String errorMessage) {
                         Log.e(TAG, "Registration failed: " + errorMessage);
+                        if (callback != null) callback.onSipRegistrationFailed();
                     }
                 });
         } catch (Exception e) {
             Log.e(TAG, "register error: " + e.getMessage());
+            if (callback != null) callback.onSipRegistrationFailed();
         }
     }
 
-    public void callSip(String ext, String remoteHost) {
+    public boolean callSip(String ext, String remoteHost) {
+        if (sipManager == null || localProfile == null) {
+            Log.e(TAG, "callSip skipped: SIP stack not ready");
+            return false;
+        }
         try {
             SipProfile.Builder b = new SipProfile.Builder(ext, remoteHost);
             SipProfile callee = b.build();
@@ -88,8 +100,10 @@ public class LinphoneEngine {
                     }
                 }, 30
             );
+            return currentCall != null;
         } catch (Exception e) {
             Log.e(TAG, "callSip error: " + e.getMessage());
+            return false;
         }
     }
 

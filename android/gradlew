@@ -1,24 +1,55 @@
 #!/bin/sh
-#
-# Gradle startup script for UN*X
-#
-APP_NAME="Gradle"
-APP_BASE_NAME=`basename "$0"`
-APP_HOME="`pwd -P`"
-MAX_FD="maximum"
-warn () { echo "$*"; }
-die () { echo; echo "ERROR: $*"; echo; exit 1; }
-case "`uname`" in
-  CYGWIN*) cygwin=true;;
-  Darwin*) darwin=true;;
-  MSYS* | MINGW*) msys=true;;
-esac
-if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
-  APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+
+set -eu
+
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WRAPPER_PROPERTIES="$APP_HOME/gradle/wrapper/gradle-wrapper.properties"
+
+if [ ! -f "$WRAPPER_PROPERTIES" ]; then
+  echo "Missing $WRAPPER_PROPERTIES" >&2
+  exit 1
 fi
-CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
-JAVA_OPTS="-Xmx64m -Xms64m"
-exec "$JAVACMD" $JAVA_OPTS $GRADLE_OPTS \
-  -classpath "$CLASSPATH" \
-  org.gradle.wrapper.GradleWrapperMain \
-  "$@"
+
+DIST_URL=$(grep '^distributionUrl=' "$WRAPPER_PROPERTIES" | cut -d= -f2- | sed 's#\\:#:#g')
+if [ -z "$DIST_URL" ]; then
+  echo "distributionUrl not found in $WRAPPER_PROPERTIES" >&2
+  exit 1
+fi
+
+DIST_NAME=$(basename "$DIST_URL")
+DIST_BASENAME=${DIST_NAME%.zip}
+DIST_DIR_NAME=${DIST_BASENAME%-bin}
+DIST_DIR_NAME=${DIST_DIR_NAME%-all}
+GRADLE_VERSION_DIR="$APP_HOME/.gradle-dist"
+ZIP_PATH="$GRADLE_VERSION_DIR/$DIST_NAME"
+UNZIP_ROOT="$GRADLE_VERSION_DIR/unpacked"
+GRADLE_DIR="$UNZIP_ROOT/$DIST_DIR_NAME"
+GRADLE_BIN="$GRADLE_DIR/bin/gradle"
+
+mkdir -p "$GRADLE_VERSION_DIR" "$UNZIP_ROOT"
+
+if [ ! -x "$GRADLE_BIN" ]; then
+  if [ ! -f "$ZIP_PATH" ]; then
+    echo "Downloading $DIST_URL" >&2
+    curl -L --fail --retry 3 --output "$ZIP_PATH" "$DIST_URL"
+  fi
+
+  rm -rf "$GRADLE_DIR"
+  unzip -q -o "$ZIP_PATH" -d "$UNZIP_ROOT"
+fi
+
+JAVA_BIN=${JAVA_HOME:-}
+if [ -n "$JAVA_BIN" ]; then
+  JAVA_BIN="$JAVA_BIN/bin/java"
+else
+  JAVA_BIN=$(command -v java || true)
+fi
+
+if [ -z "$JAVA_BIN" ] || [ ! -x "$JAVA_BIN" ]; then
+  echo "Java runtime not found. Set JAVA_HOME or install Java." >&2
+  exit 1
+fi
+
+export JAVA_HOME=${JAVA_HOME:-$(dirname "$(dirname "$JAVA_BIN")")}
+
+exec "$GRADLE_BIN" "$@"

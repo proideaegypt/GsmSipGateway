@@ -1,5 +1,6 @@
 package com.gsmsipgateway;
 import android.app.*;
+import android.media.AudioManager;
 import android.content.*;
 import android.os.*;
 import android.telecom.TelecomManager;
@@ -13,12 +14,24 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
     private String host, user, pass, ext;
     private int port;
     private boolean isSipRegistered = false;
-    private Handler handler = new Handler(Looper.getMainLooper());
+    private boolean bridgeInProgress = false;
+    private int bridgeAttempts = 0;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable bridgeRunnable = this::bridgeToExtension;
+    private AudioManager audioManager;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createChannel();
+        audioManager = getSystemService(AudioManager.class);
+        PowerManager pm = getSystemService(PowerManager.class);
+        if (pm != null) {
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG + ":bridge");
+            wakeLock.setReferenceCounted(false);
+            wakeLock.acquire(10 * 60 * 1000L);
+        }
         startForeground(1, note("Initializing..."));
         reload();
     }
@@ -30,6 +43,10 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
         user = p.getString("username", "android_gsm1");
         pass = p.getString("password", "");
         ext  = p.getString("bridge_ext", "1000");
+        isSipRegistered = false;
+        bridgeInProgress = false;
+        bridgeAttempts = 0;
+        handler.removeCallbacks(bridgeRunnable);
         if (sip != null) sip.destroy();
         sip = new LinphoneEngine(this, this);
         sip.register(host, port, user, pass);
@@ -43,11 +60,19 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
                 case "ACTION_INCOMING_CALL":
                     String caller = intent.getStringExtra("caller_number");
                     updateNote("Incoming: " + caller);
+                    prepareAudio();
                     autoAnswer();
-                    handler.postDelayed(() -> bridgeToHaidi(), 1200);
+                    bridgeInProgress = true;
+                    bridgeAttempts = 0;
+                    handler.removeCallbacks(bridgeRunnable);
+                    handler.postDelayed(bridgeRunnable, 1200);
                     break;
                 case "ACTION_CALL_ENDED":
+                    handler.removeCallbacks(bridgeRunnable);
+                    bridgeInProgress = false;
+                    bridgeAttempts = 0;
                     if (sip != null) sip.hangup();
+                    resetAudio();
                     updateNote("Ready - Waiting...");
                     break;
                 case "ACTION_RELOAD":
@@ -66,19 +91,20 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
         } catch (SecurityException e) { Log.e(TAG, e.getMessage()); }
     }
 
-    private void bridgeToHaidi() {
+    private void bridgeToExtension() {
+        if (!bridgeInProgress) {
+            return;
+        }
         if (!isSipRegistered) {
-            Log.w(TAG, "SIP not registered yet, retrying bridge in 500ms...");
-            handler.postDelayed(this::bridgeToHaidi, 500);
+            scheduleBridgeRetry("SIP not registered yet");
             return;
         }
 
         Log.d(TAG, "SIP registered, bridging to extension " + ext);
-        updateNote("Bridging to Haidi...");
+        updateNote("Dialing SIP extension...");
         boolean success = sip.callSip(ext, host);
         if (!success) {
-            Log.e(TAG, "Failed to dial " + ext + ", will retry in 500ms");
-            handler.postDelayed(this::bridgeToHaidi, 500);
+            scheduleBridgeRetry("Failed to dial " + ext);
         }
     }
 
@@ -88,17 +114,51 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
         updateNote("SIP Registered - Ready");
     }
 
-    @Override public void onSipCallConnected() { updateNote("Bridge Active"); }
-    @Override public void onSipCallEnded()     { updateNote("Ready - Waiting..."); }
-
-    private void onSipRegistrationFailed() {
+    @Override public void onSipRegistrationFailed() {
         isSipRegistered = false;
         Log.e(TAG, "SIP Registration failed, will retry in 2000ms");
         updateNote("Registration Failed - Retrying...");
         handler.postDelayed(() -> {
-            Log.d(TAG, "Retrying SIP registration...");
-            sip.register(host, port, user, pass);
+            if (sip != null) {
+                Log.d(TAG, "Retrying SIP registration...");
+                sip.register(host, port, user, pass);
+            }
         }, 2000);
+    }
+
+    @Override public void onSipCallConnected() { updateNote("Bridge Active"); }
+    @Override public void onSipCallEnded()     {
+        bridgeInProgress = false;
+        bridgeAttempts = 0;
+        resetAudio();
+        updateNote("Ready - Waiting...");
+    }
+
+    private void scheduleBridgeRetry(String reason) {
+        bridgeAttempts++;
+        if (bridgeAttempts > 10) {
+            bridgeInProgress = false;
+            updateNote("Bridge failed");
+            Log.e(TAG, reason + ", giving up after " + bridgeAttempts + " attempts");
+            return;
+        }
+        Log.w(TAG, reason + ", retrying in 500ms");
+        handler.postDelayed(bridgeRunnable, 500);
+    }
+
+    private void prepareAudio() {
+        if (audioManager != null) {
+            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            audioManager.setSpeakerphoneOn(false);
+            audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+        }
+    }
+
+    private void resetAudio() {
+        if (audioManager != null) {
+            audioManager.setMode(AudioManager.MODE_NORMAL);
+            audioManager.abandonAudioFocus(null);
+        }
     }
 
     private void createChannel() {
@@ -113,5 +173,11 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
     private void updateNote(String t) { getSystemService(NotificationManager.class).notify(1, note(t)); }
 
     @Override public IBinder onBind(Intent i) { return null; }
-    @Override public void onDestroy() { if (sip != null) sip.destroy(); super.onDestroy(); }
+    @Override public void onDestroy() {
+        handler.removeCallbacks(bridgeRunnable);
+        resetAudio();
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        if (sip != null) sip.destroy();
+        super.onDestroy();
+    }
 }
