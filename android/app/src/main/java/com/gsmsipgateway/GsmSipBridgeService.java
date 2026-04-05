@@ -102,7 +102,7 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
 
         Log.d(TAG, "SIP registered, bridging to extension " + ext);
         updateNote("Dialing SIP extension...");
-        boolean success = sip.callSip(ext, host);
+        boolean success = sip.callSip(ext, host, port);
         if (!success) {
             scheduleBridgeRetry("Failed to dial " + ext);
         }

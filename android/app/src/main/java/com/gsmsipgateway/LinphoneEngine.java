@@ -75,17 +75,29 @@ public class LinphoneEngine {
         }
     }
 
-    public boolean callSip(String ext, String remoteHost) {
+    public boolean callSip(String ext, String remoteHost, int remotePort) {
         if (sipManager == null || localProfile == null) {
             Log.e(TAG, "callSip skipped: SIP stack not ready");
             return false;
         }
+        if (ext == null || ext.trim().isEmpty()) {
+            Log.e(TAG, "callSip skipped: empty bridge extension");
+            return false;
+        }
         try {
-            SipProfile.Builder b = new SipProfile.Builder(ext, remoteHost);
-            SipProfile callee = b.build();
+            String cleanExt = ext.trim();
+            String peerUri;
+            if (cleanExt.startsWith("sip:")) {
+                peerUri = cleanExt;
+            } else if (cleanExt.contains("@")) {
+                peerUri = "sip:" + cleanExt;
+            } else {
+                peerUri = "sip:" + cleanExt + "@" + remoteHost + ":" + remotePort;
+            }
+            Log.d(TAG, "Dialing peerUri=" + peerUri + " from " + localProfile.getUriString());
             currentCall = sipManager.makeAudioCall(
                 localProfile.getUriString(),
-                callee.getUriString(),
+                peerUri,
                 new SipAudioCall.Listener() {
                     @Override public void onCallEstablished(SipAudioCall call) {
                         call.startAudio();
