@@ -45,6 +45,8 @@ public class LinphoneEngine {
             SipProfile.Builder builder = new SipProfile.Builder(user, host);
             builder.setPassword(pass);
             builder.setPort(port);
+            builder.setProtocol("UDP");
+            builder.setOutboundProxy(host + ":" + port);
             builder.setAutoRegistration(true);
             localProfile = builder.build();
 
@@ -61,7 +63,7 @@ public class LinphoneEngine {
                         Log.d(TAG, "Registering...");
                     }
                     @Override public void onRegistrationDone(String localProfileUri, long expiryTime) {
-                        Log.d(TAG, "Registered OK");
+                        Log.d(TAG, "Registered OK | uri=" + localProfileUri + " | expires=" + expiryTime);
                         if (callback != null) callback.onSipRegistered();
                     }
                     @Override public void onRegistrationFailed(String localProfileUri, int errorCode, String errorMessage) {

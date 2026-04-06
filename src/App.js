@@ -33,22 +33,23 @@ const Field = memo(function Field({
 });
 
 export default function App() {
-  const [config, setConfig] = useState({
-    host: '192.168.1.100',
-    port: '5060',
-    username: 'android_gsm1',
-    password: '',
-    bridgeExtension: '1000',
-    answerRings: '1',
-  });
+  const [host, setHost] = useState('192.168.1.100');
+  const [port, setPort] = useState('5060');
+  const [username, setUsername] = useState('android_gsm1');
+  const [password, setPassword] = useState('');
+  const [bridgeExtension, setBridgeExtension] = useState('1000');
+  const [answerRings, setAnswerRings] = useState('1');
   const [status, setStatus] = useState('Not configured');
 
   const saveAndStart = async () => {
     try {
       const result = await SipBridge.saveConfig({
-        ...config,
-        port: parseInt(config.port),
-        answerRings: parseInt(config.answerRings, 10) || 1,
+        host: host.trim(),
+        port: parseInt(port, 10) || 5060,
+        username: username.trim(),
+        password,
+        bridgeExtension: bridgeExtension.trim(),
+        answerRings: parseInt(answerRings, 10) || 1,
       });
       setStatus('Running');
       Alert.alert('Success', result);
@@ -59,7 +60,11 @@ export default function App() {
   };
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.container}
+      keyboardShouldPersistTaps="always"
+      keyboardDismissMode="none"
+    >
       <Text style={styles.title}>GSM SIP Gateway</Text>
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>Status: {status}</Text>
@@ -67,36 +72,36 @@ export default function App() {
       <Text style={styles.section}>FreePBX Settings</Text>
       <Field
         label="FreePBX IP"
-        value={config.host}
-        onChangeText={v => setConfig(p => ({...p, host: v}))}
+        value={host}
+        onChangeText={setHost}
         keyboardType="numbers-and-punctuation"
       />
       <Field
         label="SIP Port"
-        value={config.port}
-        onChangeText={v => setConfig(p => ({...p, port: v}))}
+        value={port}
+        onChangeText={setPort}
         keyboardType="numeric"
       />
       <Field
         label="SIP Username"
-        value={config.username}
-        onChangeText={v => setConfig(p => ({...p, username: v}))}
+        value={username}
+        onChangeText={setUsername}
       />
       <Field
         label="SIP Password"
-        value={config.password}
-        onChangeText={v => setConfig(p => ({...p, password: v}))}
+        value={password}
+        onChangeText={setPassword}
         secure
       />
       <Field
         label="Bridge Target (extension or SIP URI)"
-        value={config.bridgeExtension}
-        onChangeText={v => setConfig(p => ({...p, bridgeExtension: v}))}
+        value={bridgeExtension}
+        onChangeText={setBridgeExtension}
       />
       <Field
         label="Answer After Rings"
-        value={config.answerRings}
-        onChangeText={v => setConfig(p => ({...p, answerRings: v}))}
+        value={answerRings}
+        onChangeText={setAnswerRings}
         keyboardType="numeric"
       />
       <TouchableOpacity style={styles.btn} onPress={saveAndStart}>
