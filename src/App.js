@@ -1,10 +1,36 @@
-import React, {useState} from 'react';
+import React, {memo, useState} from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, NativeModules, ScrollView
 } from 'react-native';
 
 const {SipBridge} = NativeModules;
+
+const Field = memo(function Field({
+  label,
+  value,
+  onChangeText,
+  secure,
+  keyboardType,
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secure}
+        autoCapitalize="none"
+        autoCorrect={false}
+        blurOnSubmit={false}
+        keyboardType={keyboardType || 'default'}
+        placeholderTextColor="#555"
+        placeholder={label}
+      />
+    </View>
+  );
+});
 
 export default function App() {
   const [config, setConfig] = useState({
@@ -13,6 +39,7 @@ export default function App() {
     username: 'android_gsm1',
     password: '',
     bridgeExtension: '1000',
+    answerRings: '1',
   });
   const [status, setStatus] = useState('Not configured');
 
@@ -21,6 +48,7 @@ export default function App() {
       const result = await SipBridge.saveConfig({
         ...config,
         port: parseInt(config.port),
+        answerRings: parseInt(config.answerRings, 10) || 1,
       });
       setStatus('Running');
       Alert.alert('Success', result);
@@ -30,34 +58,47 @@ export default function App() {
     }
   };
 
-  const Field = ({label, keyName, secure, keyboardType}) => (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={config[keyName]}
-        onChangeText={v => setConfig(p => ({...p, [keyName]: v}))}
-        secureTextEntry={secure}
-        autoCapitalize="none"
-        keyboardType={keyboardType || 'default'}
-        placeholderTextColor="#555"
-        placeholder={label}
-      />
-    </View>
-  );
-
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>GSM SIP Gateway</Text>
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>Status: {status}</Text>
       </View>
       <Text style={styles.section}>FreePBX Settings</Text>
-      <Field label="FreePBX IP" keyName="host" keyboardType="numeric" />
-      <Field label="SIP Port" keyName="port" keyboardType="numeric" />
-      <Field label="SIP Username" keyName="username" />
-      <Field label="SIP Password" keyName="password" secure />
-      <Field label="Bridge Extension" keyName="bridgeExtension" keyboardType="numeric" />
+      <Field
+        label="FreePBX IP"
+        value={config.host}
+        onChangeText={v => setConfig(p => ({...p, host: v}))}
+        keyboardType="numbers-and-punctuation"
+      />
+      <Field
+        label="SIP Port"
+        value={config.port}
+        onChangeText={v => setConfig(p => ({...p, port: v}))}
+        keyboardType="numeric"
+      />
+      <Field
+        label="SIP Username"
+        value={config.username}
+        onChangeText={v => setConfig(p => ({...p, username: v}))}
+      />
+      <Field
+        label="SIP Password"
+        value={config.password}
+        onChangeText={v => setConfig(p => ({...p, password: v}))}
+        secure
+      />
+      <Field
+        label="Bridge Target (extension or SIP URI)"
+        value={config.bridgeExtension}
+        onChangeText={v => setConfig(p => ({...p, bridgeExtension: v}))}
+      />
+      <Field
+        label="Answer After Rings"
+        value={config.answerRings}
+        onChangeText={v => setConfig(p => ({...p, answerRings: v}))}
+        keyboardType="numeric"
+      />
       <TouchableOpacity style={styles.btn} onPress={saveAndStart}>
         <Text style={styles.btnText}>Save & Start Gateway</Text>
       </TouchableOpacity>

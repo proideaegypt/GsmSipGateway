@@ -10,14 +10,16 @@ import androidx.core.app.NotificationCompat;
 public class GsmSipBridgeService extends Service implements LinphoneEngine.BridgeCallback {
     private static final String TAG = "GsmSipBridgeService";
     private static final String CH = "gsm_sip_bridge";
+    private static final int RING_INTERVAL_MS = 5000;
     private LinphoneEngine sip;
     private String host, user, pass, ext;
-    private int port;
+    private int port, answerRings;
     private boolean isSipRegistered = false;
     private boolean bridgeInProgress = false;
     private int bridgeAttempts = 0;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable bridgeRunnable = this::bridgeToExtension;
+    private final Runnable answerRunnable = this::answerAndBridge;
     private AudioManager audioManager;
     private PowerManager.WakeLock wakeLock;
 
@@ -43,9 +45,11 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
         user = p.getString("username", "android_gsm1");
         pass = p.getString("password", "");
         ext  = p.getString("bridge_ext", "1000");
+        answerRings = Math.max(1, p.getInt("answer_rings", 1));
         isSipRegistered = false;
         bridgeInProgress = false;
         bridgeAttempts = 0;
+        handler.removeCallbacks(answerRunnable);
         handler.removeCallbacks(bridgeRunnable);
         if (sip != null) sip.destroy();
         sip = new LinphoneEngine(this, this);
@@ -59,15 +63,16 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
             switch (intent.getAction()) {
                 case "ACTION_INCOMING_CALL":
                     String caller = intent.getStringExtra("caller_number");
-                    updateNote("Incoming: " + caller);
-                    prepareAudio();
-                    autoAnswer();
                     bridgeInProgress = true;
                     bridgeAttempts = 0;
+                    handler.removeCallbacks(answerRunnable);
                     handler.removeCallbacks(bridgeRunnable);
-                    handler.postDelayed(bridgeRunnable, 1200);
+                    int answerDelayMs = Math.max(0, answerRings - 1) * RING_INTERVAL_MS;
+                    updateNote("Incoming: " + caller + " | answering after ring " + answerRings);
+                    handler.postDelayed(answerRunnable, answerDelayMs);
                     break;
                 case "ACTION_CALL_ENDED":
+                    handler.removeCallbacks(answerRunnable);
                     handler.removeCallbacks(bridgeRunnable);
                     bridgeInProgress = false;
                     bridgeAttempts = 0;
@@ -89,6 +94,16 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
             if (tm != null) tm.acceptRingingCall();
             Log.d(TAG, "GSM auto-answered");
         } catch (SecurityException e) { Log.e(TAG, e.getMessage()); }
+    }
+
+    private void answerAndBridge() {
+        if (!bridgeInProgress) {
+            return;
+        }
+        prepareAudio();
+        autoAnswer();
+        handler.removeCallbacks(bridgeRunnable);
+        handler.postDelayed(bridgeRunnable, 1200);
     }
 
     private void bridgeToExtension() {
@@ -174,6 +189,7 @@ public class GsmSipBridgeService extends Service implements LinphoneEngine.Bridg
 
     @Override public IBinder onBind(Intent i) { return null; }
     @Override public void onDestroy() {
+        handler.removeCallbacks(answerRunnable);
         handler.removeCallbacks(bridgeRunnable);
         resetAudio();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
